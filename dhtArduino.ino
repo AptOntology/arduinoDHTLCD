@@ -1,15 +1,28 @@
 /*
   dhtArduino
 
-  On interval read DHT sensor and display to serial and LCD : 
-  anthropomorphized action gliph responding to isComfortable() function, 
+  On interval read DHT sensor, write debug lines to serial, and display to LCD : 
+  anthropomorphized action gliph responding to isComfortable() function, true between 73-80F temp and 30-70% humid
   current temp and humidity, 
-  and indicator if readings are up +,down -, or same = over the time perid 10 minutes, given a saved average of collected events
-  and a rotating action gliph. 
-  16x2 LCD Example:
+  indicator if readings are up +, down -, or same = given the average of the running average and a saved collection of events over an interval
+  rotating action gliph.
+
+  Serial: 
+  88906 | Humidity: 42.10% | Temp: 79.34°F | Index: 78.95°F | All good! avg : 79.38- avg : 42.18-
+
+  16x2 LCD :
+  ----------------
   ^_^ 75.00F + <|>
   >|> 49.70% = > <
+  
+  O_O 75.00F = <|>
+  <|< 49.70% = > <
+  ---------------
+  #_# 85.00F - > <
+  >|> 90.50% + <|>
 
+  o_O 85.00F = > <
+  <|< 90.50% + <|>
 */
 #include "DHT.h"
 #include <LiquidCrystal.h>
@@ -45,7 +58,6 @@ bool bottomLeftGliph; // position 0,1 .|. -|-
 void setup() {
   Serial.begin(9600);
   Serial.println("Yass!");
-
   dht.begin();
 
   lcd.begin(16, 2);
@@ -55,66 +67,58 @@ void setup() {
   lcd.print("Press Key:");
 }
 
-bool isComfortable(float f, float h) {
+bool isComfortable(float f, float h, float lowF=73, float highF=80, float lowh=30, float highH=70) {
   bool comfortable = false;
-  if(f > 70 && f < 80)
+  if(f >= lowF && f <= highF)
   {
-       if(h > 30 && h < 70)
+       if(h >= lowh && h <= highH)
       {
         Serial.print("All good!");
-        //lcd.setCursor(4, 0);
-        //lcd.print("All good!");
         comfortable = true;
       }
   }
   else {
     Serial.print("Check temperature");
-    //lcd.setCursor(4, 0);
-    //lcd.print("Temp!");
     comfortable = false;
   }
    
-   if(h < 30 && h > 70)
+   if(h < lowh && h > highH)
     {
       Serial.print("Check water vapor");
-      //lcd.setCursor(9, 0);
-      //lcd.print("Vapor");
       comfortable = false;
     }
     return comfortable;
 }
 
-bool blinkGliph(String threeChars1, String threeChars2, int posx, int posy, bool isTrue)
+bool blinkGliph(String openGliph, String closeGliph, int posx, int posy, bool blinked)
 {
   String gliph;
-  if(isTrue) {
-      gliph = threeChars1; //"*_*";  
+  if(blinked) {
+      gliph = openGliph; //"O_O";  
     }
     else
     {
-      gliph = threeChars2; //"^_^";
+      gliph = closeGliph; //"^_^";
     }
   lcd.setCursor(posx, posy);
   lcd.print(gliph);
-  return !(isTrue); ///return opposite of input always
+  return !(blinked); ///return opposite of input always
 }
 
-/*
-float lastRisingArray[2][9]; 
-long lastRisingCheck[9]; // millis
-String isRising(float f)
+float lastRisingArray[2][9];  // 2 by 9 element array of floats, 1 each for temp and humidity and with 9 data points per given time period 
+long lastRisingCheck[9]; // millis // 1 by element array for 9 elements, 1st is temp, 2nd is humidit 
+String isRising(int dataPoint, float f)
 {
-  int betweenTime = 60000; // interval time to saves entries in array 
+  int betweenTime = 15000; //15000; // interval time to saves entries in array 
   String toReturn;
   float lastTemp = 0.00;
-
   int count = 0;
-  for (int i = 0; i < (sizeof(lastRisingArray) / sizeof(lastRisingArray[0])); i++)
+  for (int i = 0; i < (sizeof(lastRisingArray[dataPoint]) / sizeof(lastRisingArray[dataPoint][0])); i++)
   {
-   if(lastRisingArray[i] > 0)
+   if(lastRisingArray[dataPoint][i] > 0)
    {
      count = count + 1;
-     lastTemp += lastRisingArray[0][i];
+     lastTemp += lastRisingArray[dataPoint][i];
    }
   }
   if(count != 0)
@@ -123,19 +127,17 @@ String isRising(float f)
   }
   else
   {
-    if(lastRisingArray[0][0] == 0.00)
+    if(lastRisingArray[dataPoint][0] == 0.00)
     {
       lastTemp = f; // if this is the very first then now is the best last
     }
     else
     {
-      lastTemp = lastRisingArray[0][0]; 
+      lastTemp = lastRisingArray[dataPoint][0]; 
     }
   }
-
-  Serial.print(" avg Temp: ");
+  Serial.print(" avg : ");
   Serial.print(lastTemp);
-
   if(lastTemp < f)
   {
     toReturn = "+";
@@ -148,178 +150,40 @@ String isRising(float f)
   {
     toReturn = "=";
   }
-  if((millis() > lastRisingCheck[0] + betweenTime) || (lastRisingCheck[0] == 0)) // ten minutes = 600000, 
+  if((millis() > lastRisingCheck[dataPoint] + betweenTime) || (lastRisingCheck[dataPoint] == 0)) // ten minutes = 600000, 
   {
-    for (int b = 0; b < (sizeof(lastRisingArray) / sizeof(lastRisingArray[0])); b++)
+    for (int b = 0; b < (sizeof(lastRisingArray[dataPoint]) / sizeof(lastRisingArray[dataPoint][0])); b++)
     {
-      if(lastRisingArray[0][b] <= 0.00) // if no entry
+      //Serial.println("");
+      //Serial.println(lastRisingCheck[dataPoint] + betweenTime);
+      //Serial.println(millis());
+      //Serial.println("dataPoint : " + (String)dataPoint + " b : " + (String)b + " f : " + (String)f);
+      if(lastRisingArray[dataPoint][b] <= 1.00) // if no entry
       {
-        lastRisingArray[0][b] = f;
-        lastRisingCheck[0][b] = millis();
+        //Serial.println(millis());
+        lastRisingArray[dataPoint][b] = f;
+        lastRisingCheck[dataPoint] = millis();
         break;
+      }
+      else 
+      {
+        //Serial.println("lastRisingArray[dataPoint][b] <= 0.00");
       }
     }
   }
-  if(count == ((sizeof(lastRisingArray[0]) / sizeof(lastRisingArray[0][0]))))
+  else {
+  //Serial.println("millis < lastRun");
+  }
+  if(count == ((sizeof(lastRisingArray[dataPoint]) / sizeof(lastRisingArray[dataPoint][0]))))
   {
     //Serial.println("Clearing array");
     // skip first element 0, it's always the last temp/average
-    for (int a = 1; a < (sizeof(lastRisingArray[0]) / sizeof(lastRisingArray[0][0])); a++)
+    for (int a = 1; a < (sizeof(lastRisingArray[dataPoint]) / sizeof(lastRisingArray[dataPoint][0])); a++)
     {
-      lastRisingArray[0][a] = 0;
+      lastRisingArray[dataPoint][a] = 0;
     }
-    lastRisingArray[0][0] = lastTemp; // Add the running average back to the array
+    lastRisingArray[dataPoint][0] = lastTemp; // Add the running average back to the array
   }
-
-  Serial.print(toReturn);
-  return toReturn;
-}*/
-
-float lastTempArray[9]; // 0 index holds running average
-long lastTempCheck = 0; // millis
-String isTempRising(float f)
-{
-  int betweenTime = 30000; // interval time to saves entries in array 
-  String toReturn;
-  float lastTemp = 0.00;
-
-  int count = 0;
-  for (int i = 0; i < (sizeof(lastTempArray) / sizeof(lastTempArray[0])); i++)
-  {
-   if(lastTempArray[i] > 0)
-   {
-     count = count + 1;
-     lastTemp += lastTempArray[i];
-   }
-  }
-  if(count != 0)
-  {
-    lastTemp = lastTemp / count; // average over time
-  }
-  else
-  {
-    if(lastTempArray[0] == 0.00)
-    {
-      lastTemp = f; // if this is the very first then now is the best last
-    }
-    else
-    {
-      lastTemp = lastTempArray[0]; 
-    }
-  }
-
-  Serial.print(" avg Temp: ");
-  Serial.print(lastTemp);
-
-  if(lastTemp < f)
-  {
-    toReturn = "+";
-  }
-  else if(lastTemp > f)
-  {
-    toReturn = "-";
-  }
-  else
-  {
-    toReturn = "=";
-  }
-  if((millis() > lastTempCheck + betweenTime) || (lastTempCheck == 0)) // ten minutes = 600000, 
-  {
-    for (int b = 0; b < (sizeof(lastTempArray) / sizeof(lastTempArray[0])); b++)
-    {
-      if(lastTempArray[b] <= 0.00) // if no entry
-      {
-        lastTempArray[b] = f;
-        lastTempCheck = millis();
-        break;
-      }
-    }
-  }
-  if(count == ((sizeof(lastTempArray) / sizeof(lastTempArray[0]))))
-  {
-    //Serial.println("Clearing array");
-    // skip first element 0, it's always the last temp/average
-    for (int a = 1; a < (sizeof(lastTempArray) / sizeof(lastTempArray[0])); a++)
-    {
-      lastTempArray[a] = 0;
-    }
-    lastTempArray[0] = lastTemp; // Add the running average back to the array
-  }
-
-  Serial.print(toReturn);
-  return toReturn;
-}
-
-float lastHumidArray[9]; //
-long lastHumidCheck = 0; // millis
-String isHumidRising(float f)
-{
-  int betweenTime = 30000; // interval time to saves entries in array 
-  String toReturn;
-  float lastHumid = 0.00;
-
-  int count = 0;
-  for (int i = 0; i < (sizeof(lastHumidArray) / sizeof(lastHumidArray[0])); i++)
-  {
-   if(lastHumidArray[i] > 0)
-   {
-     count = count + 1;
-     lastHumid += lastHumidArray[i];
-   }
-  }
-  if(count != 0)
-  {
-    lastHumid = lastHumid / count; // average over time
-  }
-  else
-  {
-    if(lastHumidArray[0] == 0.00)
-    {
-      lastHumid = f; // if this is the very first then now is the best last
-    }
-    else
-    {
-      lastHumid = lastHumidArray[0]; 
-    }
-  }
-
-  Serial.print(" avg Humid: ");
-  Serial.print(lastHumid);
-
-  if(lastHumid < f)
-  {
-    toReturn = "+";
-  }
-  else if(lastHumid > f)
-  {
-    toReturn = "-";
-  }
-  else
-  {
-    toReturn = "=";
-  }
-  if((millis() > lastHumidCheck + betweenTime) || (lastHumidCheck == 0)) // ten minutes = 600000, 
-  {
-    for (int b = 0; b < (sizeof(lastHumidArray) / sizeof(lastHumidArray[0])); b++)
-    {
-      if(lastHumidArray[b] <= 0.00) // if no entry
-      {
-        lastHumidArray[b] = f;
-        lastHumidCheck = millis();
-        break;
-      }
-    }
-  }
-  if(count == ((sizeof(lastHumidArray) / sizeof(lastHumidArray[0]))))
-  {
-    //Serial.println("Clearing array");
-    for (int a = 0; a < (sizeof(lastHumidArray) / sizeof(lastHumidArray[0])); a++)
-    {
-      lastHumidArray[a] = 0;
-    }
-    lastHumidArray[0] = lastHumid; // Add the running average back to the array
-  }
-
   Serial.print(toReturn);
   return toReturn;
 }
@@ -369,17 +233,17 @@ void ShowStatusToLCD(float f, float h)
   lcd.setCursor(4,0);
   lcd.print(f);
   lcd.print(F("F "));
-  lcd.print(isTempRising(f));
+  lcd.print(isRising(0,f));
 
   lcd.setCursor(4, 1);
   lcd.print(h); 
   lcd.print(F("% "));
-  lcd.print(isHumidRising(h));
+  lcd.print(isRising(1,h));
 }
 
 long intervalToRun = 4000;
 long lastRun;
-
+bool flip;
 void loop() {
   float h = dht.readHumidity();
   // Read temperature as Celsius (the default)
@@ -395,6 +259,15 @@ void loop() {
   float hif = dht.computeHeatIndex(f, h);
   // Compute heat index in Celsius (isFahreheit = false)
   //float hic = dht.computeHeatIndex(t, h, false);
+  /*if(flip == true)
+  { 
+    Serial.print("o_O ");
+   } 
+  else {
+    Serial.print("O_o ");
+  }
+  flip = !flip;*/
+  
   Serial.print(millis());
   Serial.print(F(" | Humidity: "));
   Serial.print(h);
