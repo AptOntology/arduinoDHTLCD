@@ -2,7 +2,7 @@
   dhtArduino
 
   On interval read DHT sensor, write debug lines to serial, and display to LCD : 
-  anthropomorphized action gliph responding to isComfortable() function, true between 73-80F temp and 30-70% humid
+  anthropomorphized action gliph responding to some isComfortable() function
   current temp and humidity, 
   indicator if readings are up +, down -, or same = given the average of the running average and a saved collection of events over an interval
   rotating action gliph.
@@ -12,17 +12,17 @@
 
   16x2 LCD :
   ----------------
-  ^_^ 75.00F + <|>
-  >|> 49.70% = > <
-  
-  O_O 75.00F = <|>
-  <|< 49.70% = > <
-  ---------------
-  #_# 85.00F - > <
-  >|> 90.50% + <|>
+  ^_^ 75.00F + o O
+  >|> 49.70% = _'
 
-  o_O 85.00F = > <
-  <|< 90.50% + <|>
+  @_@ 85.00F + _ _
+  >|> 89.70% = .'
+
+  TODO 
+
+  Structure to support comms with esp8266_client, extend esp function with the pin support of arduino
+  serial out: @command specific 
+  read serial in and respond to specific lines
 */
 #include "DHT.h"
 #include <LiquidCrystal.h>
@@ -67,7 +67,7 @@ void setup() {
   lcd.print("Press Key:");
 }
 
-bool isComfortable(float f, float h, float lowF=73, float highF=80, float lowh=30, float highH=70) {
+bool isComfortable(float f, float h, float lowF=71, float highF=80, float lowh=20, float highH=70) {
   bool comfortable = false;
   if(f >= lowF && f <= highF)
   {
@@ -106,7 +106,7 @@ bool blinkGliph(String openGliph, String closeGliph, int posx, int posy, bool bl
 }
 
 float lastRisingArray[2][9];  // 2 by 9 element array of floats, 1 each for temp and humidity and with 9 data points per given time period 
-long lastRisingCheck[9]; // millis // 1 by element array for 9 elements, 1st is temp, 2nd is humidit 
+long lastRisingCheck[9]; // millis // 1 by element array for 9 elements, 1st is temp, 2nd is humidity
 String isRising(int dataPoint, float f)
 {
   int betweenTime = 15000; //15000; // interval time to saves entries in array 
@@ -154,10 +154,6 @@ String isRising(int dataPoint, float f)
   {
     for (int b = 0; b < (sizeof(lastRisingArray[dataPoint]) / sizeof(lastRisingArray[dataPoint][0])); b++)
     {
-      //Serial.println("");
-      //Serial.println(lastRisingCheck[dataPoint] + betweenTime);
-      //Serial.println(millis());
-      //Serial.println("dataPoint : " + (String)dataPoint + " b : " + (String)b + " f : " + (String)f);
       if(lastRisingArray[dataPoint][b] <= 1.00) // if no entry
       {
         //Serial.println(millis());
@@ -165,14 +161,7 @@ String isRising(int dataPoint, float f)
         lastRisingCheck[dataPoint] = millis();
         break;
       }
-      else 
-      {
-        //Serial.println("lastRisingArray[dataPoint][b] <= 0.00");
-      }
     }
-  }
-  else {
-  //Serial.println("millis < lastRun");
   }
   if(count == ((sizeof(lastRisingArray[dataPoint]) / sizeof(lastRisingArray[dataPoint][0]))))
   {
@@ -198,12 +187,41 @@ void ShowStatusToLCD(float f, float h)
   }
   else
   {
-    topLeftGliph = blinkGliph("o_O","#_#",0,0,topLeftGliph);
+    topLeftGliph = blinkGliph("*_*","@_@",0,0,topLeftGliph);
   }
+  bottomLeftGliph = blinkGliph("<|<",">|>",0,1,bottomLeftGliph);
 
+  bool bottomMiddle = blinkGliph("'"," ",14,1,true);
+
+  //bool topRight = blinkGliph("O","_",15,0,bottomLeftGliph);
+  //bool bottomRight = blinkGliph("",">",15,1,bottomLeftGliph);
+
+  if(lineGliphCount >= random(15))
+  {
+    if(lineGliphCount == 5)
+    {
+      bool topRight2 = blinkGliph("O","O",13,0,bottomLeftGliph);  
+      bool topRight = blinkGliph("O","O",15,0,bottomLeftGliph);
+      bool bottomRight1 = blinkGliph(".","o",13,1,bottomLeftGliph);
+      bool bottomMiddle = blinkGliph("-"," ",14,0,topLeftGliph);
+    }
+    else
+    {
+      bool topRight2 = blinkGliph("O","_",13,0,bottomLeftGliph);  
+      bool topRight = blinkGliph("o","_",15,0,bottomLeftGliph);
+      bool bottomRight1 = blinkGliph("o",".",13,1,bottomLeftGliph);
+    }
+  }
+  else 
+  {
+    bool topRight2 = blinkGliph("o","_",13,0,bottomLeftGliph);
+    bool topRight = blinkGliph("O","_",15,0,bottomLeftGliph);  
+    bool bottomRight1 = blinkGliph("_","_",13,1,bottomLeftGliph);
+  }
+/*
   bool topRight1 = blinkGliph(">","<",13,0,bottomLeftGliph);
-  //blink two on, two off
-  if(lineGliphCount >= 2)
+  //blink
+  if(lineGliphCount >= 3)
   {
     bool topRight2 = blinkGliph("|"," ",14,0,true);
   }
@@ -214,8 +232,7 @@ void ShowStatusToLCD(float f, float h)
   bool topRight = blinkGliph("<",">",15,0,bottomLeftGliph);
   bottomLeftGliph = blinkGliph("<|<",">|>",0,1,bottomLeftGliph);
   bool bottomRight1 = blinkGliph(">","<",13,1,bottomLeftGliph);
-
-  if(lineGliphCount >= 2)
+  if(lineGliphCount >= 3)
   { 
     bool bottomRight1 = blinkGliph("|"," ",14,1,false);
   }
@@ -223,11 +240,48 @@ void ShowStatusToLCD(float f, float h)
   {
     bool bottomRight1 = blinkGliph("|"," ",14,1,true);
   }
-
   bool bottomRight = blinkGliph("<",">",15,1,bottomLeftGliph);
+*/
 
-  if(lineGliphCount == 3) { lineGliphCount = 0;}
 
+
+
+/*
+  bool topRight1 = blinkGliph("|","|",13,0,bottomLeftGliph);
+  //blink two on, two off
+  if(lineGliphCount >= 2)
+  {
+    bool topRight2 = blinkGliph("-","=",14,0,true);
+  }
+  else
+  {
+    bool topRight2 = blinkGliph("-","-",14,0,false);
+  }
+  bool topRight = blinkGliph("|","|",15,0,bottomLeftGliph);
+
+  bottomLeftGliph = blinkGliph("<|<",">|>",0,1,bottomLeftGliph);
+
+  bool bottomRight1 = blinkGliph("|","|",13,1,bottomLeftGliph);
+  if(lineGliphCount >= 2)
+  { 
+    bool bottomRight1 = blinkGliph("_","_",14,1,false);
+  }
+  else
+  {
+    bool bottomRight1 = blinkGliph("_","_",14,1,true);
+  }
+  bool bottomRight = blinkGliph("|","|",15,1,bottomLeftGliph);
+
+if(lineGliphCount >= 3) // 3 4 5 
+{
+  bool rotator1 = blinkGliph("."," ",10+lineGliphCount,0,true); //14 to 16
+}
+else // 0 1 2 
+{
+  bool rotator1 = blinkGliph("."," ",16-lineGliphCount,1,true); //bottom
+}
+*/
+  if(lineGliphCount == 5) { lineGliphCount = 0;}
   lineGliphCount = lineGliphCount + 1;
 
   lcd.setCursor(4,0);
